@@ -1,0 +1,19 @@
+{
+  "name": "youtube-downloader",
+  "version": "1.0.0",
+  "description": "This uses a youtube scrapper by vreden and fetch the audio from that url and save in the local storage of the os.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "keywords": [],
+  "author": "nikitimi",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@vreden/youtube_scraper": "^1.2.6",
+    "googleapis": "^146.0.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.7"
+  }
+}
