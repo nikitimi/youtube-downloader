@@ -2,7 +2,8 @@ import { ytmp3 } from "@vreden/youtube_scraper";
 // import { google } from "googleapis";
 import dotenv from "dotenv";
 import saveToFile from "./saveToFile.js";
-import list from "../list.json" assert { type: "json" };
+import fileFailedConversion from "./utils/fileFailedConversion.js";
+import list from "../list.json" with { type: "json" };
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ for (const { videoId, title } of list) {
   const stringURL = await getMP3FromVideoId(videoId);
   if (typeof stringURL !== "string" || stringURL.trim() === "") {
     // TODO: Implement a downloader for the youtube video not found within scrapper API.
+    await fileFailedConversion({ videoId, title });
     continue;
   }
   await saveToFile(stringURL, title);
