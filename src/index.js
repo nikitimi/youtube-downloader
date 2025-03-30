@@ -1,8 +1,8 @@
 import { ytmp3 } from "@vreden/youtube_scraper";
-import { google } from "googleapis";
+// import { google } from "googleapis";
 import dotenv from "dotenv";
 import saveToFile from "./saveToFile.js";
-// import list from "../list.json" assert { type: "json" };
+import list from "../list.json" assert { type: "json" };
 
 dotenv.config();
 
@@ -11,7 +11,7 @@ async function getMP3FromVideoId(videoId) {
   console.log(`Initializing download for ${url}`);
 
   try {
-    const res = await ytmp3(url, 256);
+    const res = await ytmp3(url, 128);
     if (!res.status) return console.log(res.message);
     return res.download.url;
   } catch (err) {
@@ -22,10 +22,10 @@ async function getMP3FromVideoId(videoId) {
   }
 }
 
-const youtube = google.youtube({
-  version: "v3",
-  auth: process.env.YOUTUBE_API_KEY,
-});
+// const youtube = google.youtube({
+//   version: "v3",
+//   auth: process.env.YOUTUBE_API_KEY,
+// });
 // Search for Video in YouTube
 // for (const song of list) {
 //   const result = youtube.search.list({
@@ -45,10 +45,11 @@ const youtube = google.youtube({
 // }
 
 // Direct `videoId`.
-for (const { videoId, title } of [
-  { videoId: "gBINgb_aNkk", title: "Before You Go - Matt Monro" },
-  { videoId: "4UV7ci0tn0o", title: "Tanging Ikaw - Zander Khan" },
-]) {
+for (const { videoId, title } of list) {
   const stringURL = await getMP3FromVideoId(videoId);
+  if (typeof stringURL !== "string" || stringURL.trim() === "") {
+    // TODO: Implement a downloader for the youtube video not found within scrapper API.
+    continue;
+  }
   await saveToFile(stringURL, title);
 }

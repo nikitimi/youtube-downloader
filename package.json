@@ -10,10 +10,11 @@
   "author": "nikitimi",
   "license": "UNLICENSED",
   "dependencies": {
-    "@vreden/youtube_scraper": "^1.2.6",
-    "googleapis": "^146.0.0"
+    "@vreden/youtube_scraper": "^1.2.7",
+    "puppeteer": "^24.4.0"
   },
   "devDependencies": {
     "dotenv": "^16.4.7"
-  }
+  },
+  "packageManager": "pnpm@9.12.3+sha512.cce0f9de9c5a7c95bef944169cc5dfe8741abfb145078c0d508b868056848a87c81e626246cb60967cbd7fd29a6c062ef73ff840d96b3c86c40ac92cf4a813ee"
 }
