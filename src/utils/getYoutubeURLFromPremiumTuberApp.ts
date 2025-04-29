@@ -1,8 +1,8 @@
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
 
 const baseURL = "https://www.premiumtuberapp.com/video/";
 
-function sanitizeURL(url) {
+function sanitizeURL(url: string) {
   const [base, uri, ...rest] = url.split(baseURL);
   if (rest.length !== 0) {
     console.log(
@@ -16,10 +16,11 @@ function sanitizeURL(url) {
   return `${baseURL}${uri}`;
 }
 
+/** Returns `videoId` List of songs from PremiumTuber. */
 export default async function getYoutubeURLFromPremiumTuberApp(
-  premiumtuberAppURLList
+  premiumtuberAppURLList: string[]
 ) {
-  if (!premiumtuberAppURLList instanceof Array) {
+  if (!(premiumtuberAppURLList instanceof Array)) {
     return console.log("Invalid input. Please provide an array of URLs.");
   }
   const youtubeVideoIdList = [];
@@ -46,8 +47,8 @@ export default async function getYoutubeURLFromPremiumTuberApp(
           } else {
             iframe.contentFrame().then((frame) => {
               placeholderURL = frame
-                .url()
-                .replace("https://www.youtube.com/embed/", "");
+                ? frame.url().replace("https://www.youtube.com/embed/", "")
+                : "";
             });
           }
           resolve(placeholderURL);
