@@ -1,106 +1,117 @@
-// import { google } from "googleapis";
-import dotenv from "dotenv";
+import { firefox } from "playwright";
+import fs from "node:fs/promises";
 import saveToFile from "./saveToFile.js";
 import getMP3FromVideoId from "./utils/getMP3FromVideoId.js";
-import fs from "node:fs/promises";
-import rename from "./utils/puppeteer/rename.js";
-import browser from "./utils/puppeteer/puppeteer.js";
+import { tryCatch } from "./utils/tryCatch.js";
 
-dotenv.config();
-
-/** Create a YouTube API helper. */
-// const youtube = google.youtube({
-//   version: "v3",
-//   auth: process.env.YOUTUBE_API_KEY,
-// });
-
-/** ARGUMENT MUST BE VIDEO ID ARRAY. */
-async function processTheSongByVideoId(arrayedList: string[]) {
-  for (const videoId of arrayedList) {
-    console.table({ videoId });
-    const { downloadURL, youTubeURL } = await getMP3FromVideoId(videoId);
-    const title = await rename(youTubeURL);
-    await saveToFile(downloadURL, title);
-  }
+function notEmptyString(v: string) {
+  return v.trim() !== "";
 }
 
-async function processSongList(array: string[] = []) {
-  // If an array argument has been passed.
-  if (array.length > 0) {
-    await processTheSongByVideoId(array);
-    return;
-  }
-  const rawSongList = new URL("../songlist.txt", import.meta.url);
-  const buffer = await fs.readFile(rawSongList);
-  const arrayedList = buffer.toString().split("\n");
-
-  // If no array argument is passed.
-  if (arrayedList.length > 0) {
-    await processTheSongByVideoId(arrayedList);
-    return;
-  }
+async function getSongURLList() {
+  const songURLListURL = new URL("../8link.txt", import.meta.url);
+  const buffer = await fs.readFile(songURLListURL);
+  return buffer.toString().split("\r\n").filter(notEmptyString);
 }
 
-/** Returns 0 to many instance of videoId Array. */
-async function process8LinkURLList() {
-  const videoIdList = [];
-  try {
-    const rawSongList = new URL("../8link.txt", import.meta.url);
-    const buffer = await fs.readFile(rawSongList);
-    const arrayedList = buffer.toString().split("\n");
+async function automate() {
+  const browser = await tryCatch(
+    firefox.launch({
+      headless: false,
+    })
+  );
 
-    if (arrayedList.length > 0) {
-      const page = await browser.newPage();
-      for (const rawURL of arrayedList) {
-        await page.goto(rawURL);
-        const [videoId] = page
-          .url()
-          .replace("https://www.premiumtuberapp.com/video/", "")
-          .split("?");
-        console.info(videoId);
-        videoIdList.push(videoId);
+  if (!browser.data || browser.error) {
+    const error =
+      browser.error instanceof Error
+        ? browser.error.message
+        : "Unknown error occured.";
+    console.warn(`[BROWSER LAUNCH ERROR]: ${error.toUpperCase()}.`);
+    return;
+  }
+
+  const songURLList = await tryCatch(getSongURLList());
+
+  if (!songURLList.data || songURLList.error) {
+    const error =
+      songURLList.error instanceof Error
+        ? songURLList.error.message
+        : "Unknown error occured.";
+    console.warn(`[READING SONG LIST ERROR]: ${error.toUpperCase()}.`);
+    return;
+  }
+
+  const page = await browser.data.newPage();
+  const resultLogList: Record<"downloadURL" | "title", string>[] = [];
+  const titleHeading = "h1[class='style-scope ytd-watch-metadata']";
+
+  function sanitizeURL(url: string) {
+    const baseURL = "https://www.premiumtuberapp.com/video/";
+    const [videoID] = url.replace(baseURL, "").split("?");
+    return videoID;
+  }
+
+  page.on("domcontentloaded", async (p) => {
+    const youtubeURLPage = await browser.data.newPage();
+    const videoID = sanitizeURL(p.url());
+    if (videoID.includes("https"))
+      return console.warn(`[INVALID VIDEO ID]: ${videoID}.`);
+    const { downloadURL, youTubeURL } = await getMP3FromVideoId(videoID);
+    await tryCatch(youtubeURLPage.goto(youTubeURL));
+    await tryCatch(youtubeURLPage.waitForSelector(titleHeading));
+
+    youtubeURLPage.on("domcontentloaded", async (pp) => {
+      const textContent = await tryCatch(
+        pp.locator(titleHeading).textContent()
+      );
+      if (!textContent.data) {
+        console.warn("[CANNOT LOCATE TITLE IN YOUTUBE].");
+        return;
       }
-      return videoIdList;
-    }
-  } catch (err) {
-    if (err instanceof Error) {
-      console.warn(err.message);
-    }
-    return videoIdList;
+      resultLogList.push({ downloadURL, title: textContent.data });
+    });
+
+    await youtubeURLPage.close();
+  });
+
+  //   for (const songURL of songURLList.data) {
+  //     const response = await tryCatch(page.goto(songURL, { timeout: 60000 }));
+  //     if (!response.data || response.error) {
+  //       const error =
+  //         response.error instanceof Error
+  //           ? response.error.message
+  //           : "Unknown error occured.";
+  //       console.warn(`[GOTO URL]: ${error.toUpperCase()}.`);
+  //       continue;
+  //     }
+  //   }
+  const promiseList = songURLList.data.map((songURL) =>
+    tryCatch(page.goto(songURL, { timeout: 60000 })).then((response) => {
+      if (!response.data || response.error) {
+        const error =
+          response.error instanceof Error
+            ? response.error.message
+            : "Unknown error occured.";
+        console.warn(`[GOTO URL]: ${error.toUpperCase()}.`);
+      }
+    })
+  );
+
+  const results = await Promise.allSettled(promiseList);
+
+  for (const result of results) {
+    console.table(result);
   }
+  for (const { downloadURL, title } of resultLogList) {
+    const result = await tryCatch(saveToFile(downloadURL, title));
+    const isUnsuccessful = result.data === null || result.error;
+    console.info(`[${isUnsuccessful ? "❌" : "✔"}]: FOR ${downloadURL}.`);
+  }
+  //   await page.waitForSelector(selector);
+  //   const title = await page.locator(selector).textContent();
+  console.table(resultLogList);
+  await page.close();
+  await browser.data.close();
 }
-const videoIdArray = await process8LinkURLList();
-console.table(videoIdArray);
-await processSongList(videoIdArray);
-await browser.close();
 
-/** WITH YOUTUBE SEARCH. */
-// if (arrayedList.length > 0) {
-//   // Search for Video in YouTube
-//   for (const song of arrayedList) {
-//     const result = youtube.search.list({
-//       part: "snippet",
-//       q: `${song} lyrics video`,
-//     });
-
-//     if (result instanceof Promise) {
-//       const { data } = await result;
-//       if (data.items instanceof Array && data.items.length > 0) {
-//         const videoId = data.items[0].id.videoId;
-//         console.table({ song, videoId });
-//         // const stringURL = await getMP3FromVideoId(videoId);
-//         // await saveToFile(stringURL, song);
-//       }
-//     }
-//   }
-// }
-
-/** DIRECT VIDEO ID. */
-// for (const { videoId, title } of list) {
-//   const stringURL = await getMP3FromVideoId(videoId);
-//   if (typeof stringURL !== "string" || stringURL.trim() === "") {
-//     // TODO: Implement a downloader for the youtube video not found within scrapper API.
-//     continue;
-//   }
-//   await saveToFile(stringURL, title);
-// }
+await automate();
