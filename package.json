@@ -4,16 +4,21 @@
   "description": "This uses a youtube scrapper by vreden and fetch the audio from that url and save in the local storage of the os.",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node dist/index.js",
+    "build": "(if exist dist rmdir /s /q dist) && tsc"
   },
   "keywords": [],
   "author": "nikitimi",
   "license": "UNLICENSED",
   "dependencies": {
-    "@vreden/youtube_scraper": "^1.2.6",
-    "googleapis": "^146.0.0"
+    "@vreden/youtube_scraper": "^1.2.7",
+    "googleapis": "^148.0.0"
   },
   "devDependencies": {
-    "dotenv": "^16.4.7"
-  }
+    "@types/node": "^22.15.17",
+    "dotenv": "^16.4.7",
+    "playwright": "^1.52.0",
+    "typescript": "^5.8.3"
+  },
+  "packageManager": "pnpm@10.7.0+sha512.6b865ad4b62a1d9842b61d674a393903b871d9244954f652b8842c2b553c72176b278f64c463e52d40fff8aba385c235c8c9ecf5cc7de4fd78b8bb6d49633ab6"
 }
