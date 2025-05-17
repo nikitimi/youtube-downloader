@@ -1,6 +1,6 @@
 import { firefox } from "playwright";
 import fs from "node:fs/promises";
-import saveToFile from "./saveToFile.js";
+import saveToFile from "./utils/saveToFile.js";
 import getMP3FromVideoId from "./utils/getMP3FromVideoId.js";
 import { tryCatch } from "./utils/tryCatch.js";
 
@@ -70,19 +70,35 @@ async function automate() {
     const titleHeading = "h1[class='style-scope ytd-watch-metadata']";
     browser.data.newPage().then(async (page) => {
       console.table(songURLList.data);
+      let index = 0;
 
       for (const songURL of songURLList.data) {
+        let downloadURL = "";
         await tryCatch(page.goto(songURL, { timeout: TIMEOUT }));
 
-        const videoID = sanitizeURL(page.url());
-        const { downloadURL, youTubeURL } = await getMP3FromVideoId(videoID);
+        if (!songURL.includes("youtu")) {
+          const videoID = sanitizeURL(page.url());
+          const { downloadURL: dURL, youTubeURL } = await getMP3FromVideoId(
+            videoID,
+            index
+          );
+          downloadURL = dURL;
 
-        if (videoID.includes("https")) {
-          return console.warn(`[INVALID VIDEO ID]: ${videoID}.`);
+          // if (videoID.includes("https")) {
+          //   return console.warn(`[INVALID VIDEO ID]: ${videoID}.`);
+          // }
+
+          console.info(`[DOM CONTENT LOADED]: ${youTubeURL}`);
+          await tryCatch(page.goto(youTubeURL));
+        } else {
+          const { downloadURL: dURL } = await getMP3FromVideoId(
+            songURL.split("?v=")[1],
+            index
+          );
+          downloadURL = dURL;
         }
+        index += 1;
 
-        console.info(`[DOM CONTENT LOADED]: ${youTubeURL}`);
-        await tryCatch(page.goto(youTubeURL));
         await tryCatch(page.waitForSelector(titleHeading));
 
         const textContent = await tryCatch(
@@ -108,11 +124,13 @@ async function automate() {
   /** Save the song from Scraper URL to buffer to file. */
   for (const { songURL, downloadURL, title } of awaitedList) {
     const result = await tryCatch(saveToFile(downloadURL, title));
-    const isUnsuccessful = result.data === null || result.error;
-    fs.appendFile(
+    await fs.appendFile(
       RESULT_LOG_URL,
-      `[${isUnsuccessful ? "❌" : "✔"}]: FOR ${songURL}\t${downloadURL}.\n`
+      `[${
+        result.error ? "❌" : "✔"
+      }]: FOR ${songURL} ${title} - ${downloadURL}\n`
     );
+    console.info(`[ERROR FS]: ${result.error?.message}`);
   }
 
   console.table(awaitedList);

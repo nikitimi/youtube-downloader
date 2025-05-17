@@ -1,8 +1,11 @@
 import { ytmp3 } from "@vreden/youtube_scraper";
 
-export default async function getMP3FromVideoId(videoId: string) {
+export default async function getMP3FromVideoId(
+  videoId: string,
+  index?: number
+) {
   const youTubeURL = `https://www.youtube.com/watch?v=${videoId}`;
-  console.log(`Initializing download for ${youTubeURL}`);
+  console.log(`${index ?? ""} Getting download URL for ${youTubeURL}`);
 
   try {
     const res = await ytmp3(youTubeURL, 128);
