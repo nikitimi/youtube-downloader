@@ -1,16 +1,17 @@
 import { firefox } from "playwright";
 import fs from "node:fs/promises";
-import saveToFile from "./utils/saveToFile.js";
-import getMP3FromVideoId from "./utils/getMP3FromVideoId.js";
 import { tryCatch } from "./utils/tryCatch.js";
-
-type ResultLog = { songURL: string; downloadURL: string; title: string };
+import { songListURL } from "./utils/urls.js";
+import direct from "./utils/direct.js";
+import eightLinkCleaner from "./utils/eightLinkCleaner.js";
+import Timer from "./utils/timer.js";
+import { argv } from "node:process";
+import downloadModeEnum from "./utils/enums/downloadMode.js";
 
 /*************************************************************************/
 /** CONFIG */
 /*************************************************************************/
-const RESULT_LOG_URL = new URL("../result-log.txt", import.meta.url);
-const HEADLESS = false;
+const HEADLESS = true;
 /** For some reason, playwright initial `goto` method is stuck at waiting even when the DOM is loaded.
  *
  * This is necessary to avoid waiting for too long, will always result in timeout error,
@@ -21,30 +22,40 @@ const TIMEOUT = 1500;
 /*************************************************************************/
 /*************************************************************************/
 
+/** Returns the YouTube `videoID` from premiumtuberapp.com. */
 function sanitizeURL(url: string) {
   const baseURL = "https://www.premiumtuberapp.com/video/";
   const [videoID] = url.replace(baseURL, "").split("?");
   return videoID;
 }
 
+/** Filter. */
 function notEmptyString(v: string) {
   return v.trim() !== "";
 }
 
 async function getSongURLList() {
-  const songURLListURL = new URL("../8link.txt", import.meta.url);
-  const buffer = await fs.readFile(songURLListURL);
+  const buffer = await fs.readFile(songListURL);
   return buffer.toString().split("\n").filter(notEmptyString);
 }
 
 async function automate() {
+  const { success, ...rest } = downloadModeEnum.safeParse(argv[2]);
+  const timeStart = new Date();
+  const youtubeURLList: string[] = [];
   const browser = await tryCatch(
     firefox.launch({
       headless: HEADLESS,
     })
   );
 
-  if (!browser.data || browser.error) {
+  if (!success) {
+    console.warn(`[ZOD PARSER]:`);
+    console.table(JSON.parse(rest.error!.message));
+    return;
+  }
+
+  if (browser.error) {
     const error =
       browser.error instanceof Error
         ? browser.error.message
@@ -53,9 +64,10 @@ async function automate() {
     return;
   }
 
+  await eightLinkCleaner();
   const songURLList = await tryCatch(getSongURLList());
 
-  if (!songURLList.data || songURLList.error) {
+  if (songURLList.error) {
     const error =
       songURLList.error instanceof Error
         ? songURLList.error.message
@@ -64,76 +76,33 @@ async function automate() {
     return;
   }
 
-  /** Get the YouTube and Scraper URL, together with YouTube title using Playwright. */
-  const resultLogList = new Promise<ResultLog[]>((resolve) => {
-    const resultLogList: ResultLog[] = [];
-    const titleHeading = "h1[class='style-scope ytd-watch-metadata']";
-    browser.data.newPage().then(async (page) => {
-      console.table(songURLList.data);
-      let index = 0;
+  const uniqueURLList = Array.from(new Set(songURLList.data));
 
-      for (const songURL of songURLList.data) {
-        let downloadURL = "";
-        await tryCatch(page.goto(songURL, { timeout: TIMEOUT }));
+  const page = await browser.data.newPage();
+  const sortedSongs = uniqueURLList.sort();
+  console.info("[SORTED UNIQUE LIST]");
+  console.table(sortedSongs);
 
-        if (!songURL.includes("youtu")) {
-          const videoID = sanitizeURL(page.url());
-          const { downloadURL: dURL, youTubeURL } = await getMP3FromVideoId(
-            videoID,
-            index
-          );
-          downloadURL = dURL;
+  for (const songURL of sortedSongs) {
+    await tryCatch(page.goto(songURL, { timeout: TIMEOUT }));
 
-          // if (videoID.includes("https")) {
-          //   return console.warn(`[INVALID VIDEO ID]: ${videoID}.`);
-          // }
-
-          console.info(`[DOM CONTENT LOADED]: ${youTubeURL}`);
-          await tryCatch(page.goto(youTubeURL));
-        } else {
-          const { downloadURL: dURL } = await getMP3FromVideoId(
-            songURL.split("?v=")[1],
-            index
-          );
-          downloadURL = dURL;
-        }
-        index += 1;
-
-        await tryCatch(page.waitForSelector(titleHeading));
-
-        const textContent = await tryCatch(
-          page.locator(titleHeading).textContent()
-        );
-
-        if (textContent.data) {
-          resultLogList.push({
-            songURL,
-            downloadURL,
-            title: textContent.data,
-          });
-        }
-      }
-      // await youtubeURLPage.close();
-      await page.close();
-      await browser.data.close();
-      resolve(resultLogList);
-    });
-  });
-
-  const awaitedList = await resultLogList;
-  /** Save the song from Scraper URL to buffer to file. */
-  for (const { songURL, downloadURL, title } of awaitedList) {
-    const result = await tryCatch(saveToFile(downloadURL, title));
-    await fs.appendFile(
-      RESULT_LOG_URL,
-      `[${
-        result.error ? "❌" : "✔"
-      }]: FOR ${songURL} ${title} - ${downloadURL}\n`
-    );
-    console.info(`[ERROR FS]: ${result.error?.message}`);
+    if (songURL.includes("youtu")) {
+      youtubeURLList.push(songURL);
+      continue;
+    }
+    const videoID = sanitizeURL(page.url());
+    youtubeURLList.push(`https://www.youtube.com/watch?v=${videoID}`);
   }
+  // await youtubeURLPage.close();
+  await page.close();
+  await browser.data.close();
 
-  console.table(awaitedList);
+  console.info("[PROCESSED LIST]");
+  console.table(youtubeURLList);
+
+  await direct(youtubeURLList, rest.data!);
+  const timeEnd = new Date();
+  new Timer(timeStart, timeEnd).logElapsedTime();
 }
 
 await automate();

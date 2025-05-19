@@ -1,19 +1,16 @@
 {
   "name": "youtube-downloader",
-  "version": "1.0.0",
-  "description": "This uses a youtube scrapper by vreden and fetch the audio from that url and save in the local storage of the os.",
+  "version": "2.0.0",
+  "description": "This uses savetube's CDN files, fetch the audio from that url and save in the local storage of the OS.",
   "type": "module",
   "scripts": {
-    "start": "node dist/index.js",
+    "start:mp3": "node dist/index.js mp3",
+    "start:mp4": "node dist/index.js mp4",
     "build": "(if exist dist rmdir /s /q dist) && tsc"
   },
   "keywords": [],
   "author": "nikitimi",
   "license": "UNLICENSED",
-  "dependencies": {
-    "@vreden/youtube_scraper": "^1.2.7",
-    "googleapis": "^148.0.0"
-  },
   "devDependencies": {
     "@types/node": "^22.15.17",
     "dotenv": "^16.4.7",
