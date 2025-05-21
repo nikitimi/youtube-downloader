@@ -1,19 +1,24 @@
 {
   "name": "youtube-downloader",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "This uses savetube's CDN files, fetch the audio from that url and save in the local storage of the OS.",
   "type": "module",
   "scripts": {
-    "start:mp3": "node dist/index.js mp3",
-    "start:mp4": "node dist/index.js mp4",
+    "start": "node dist/index.js",
     "build": "(if exist dist rmdir /s /q dist) && tsc"
   },
   "keywords": [],
   "author": "nikitimi",
   "license": "UNLICENSED",
   "devDependencies": {
+    "@types/body-parser": "^1.19.5",
+    "@types/cors": "^2.8.18",
+    "@types/express": "^5.0.2",
     "@types/node": "^22.15.17",
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "express": "^5.1.0",
     "playwright": "^1.52.0",
     "typescript": "^5.8.3"
   },

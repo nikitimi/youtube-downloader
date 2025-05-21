@@ -1,19 +1,25 @@
 import { z } from "zod";
+import downloadModeEnum from "../enums/downloadMode.js";
+
+const baseSchema = z.object({
+  mode: downloadModeEnum,
+  youtubeURL: z.string(),
+  title: z.string(),
+});
 
 const resultHolderSchema = z
   .object({
     success: z.literal(true),
     buffer: z.instanceof(Buffer),
-    youtubeURL: z.string(),
-    title: z.string(),
   })
+  .merge(baseSchema)
   .or(
-    z.object({
-      success: z.literal(false),
-      buffer: z.null(),
-      youtubeURL: z.string(),
-      title: z.string(),
-    })
+    z
+      .object({
+        success: z.literal(false),
+        buffer: z.null(),
+      })
+      .merge(baseSchema)
   );
 
 export default resultHolderSchema;

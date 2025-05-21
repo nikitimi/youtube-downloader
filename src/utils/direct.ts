@@ -1,4 +1,5 @@
 import type { ResultHolder } from "./schemas/resultHolder.js";
+import type { DownloadMode } from "./enums/downloadMode.js";
 
 import { firefox } from "playwright";
 import fs from "node:fs/promises";
@@ -6,7 +7,6 @@ import { tryCatch } from "./tryCatch.js";
 import logging from "./logging.js";
 import { rawDirectoryURL } from "./urls.js";
 import sanitizeTitle from "./sanitizeTitle.js";
-import { DownloadMode } from "./enums/downloadMode.js";
 
 /*************************************************************************/
 /** CONFIG */
@@ -17,8 +17,7 @@ const TIMEOUT = 60000;
 
 /** Directly get download link without using third-party node package. */
 export default async function direct(
-  youtubeURLList: string[],
-  downloadMode: DownloadMode
+  youtubeURLList: { songURL: string; mode: DownloadMode }[]
 ) {
   const resultHolder: ResultHolder[] = [];
   const browser = await tryCatch(
@@ -27,7 +26,7 @@ export default async function direct(
     })
   );
 
-  function selectedOption(fallback?: string) {
+  function selectedOption(downloadMode: DownloadMode, fallback?: string) {
     if (fallback === "fallback") {
       switch (downloadMode) {
         case "mp4":
@@ -58,8 +57,10 @@ export default async function direct(
     return null;
   }
 
-  for (const youtubeURL of youtubeURLList) {
-    await page.data.goto("https://yt.savetube.me/");
+  for (const { songURL: youtubeURL, mode } of youtubeURLList) {
+    await tryCatch(
+      page.data.goto("https://yt.savetube.me/", { timeout: 60000 })
+    );
 
     const searchInputLocator = page.data.locator(
       'input[placeholder="Paste your Youtube link here"]'
@@ -68,20 +69,21 @@ export default async function direct(
     const groupButton = 'div[class="btn-group flex"]';
     const anchorDownload = "a[download]";
 
-    await searchInputLocator.fill(youtubeURL);
-    await searchButtonLocator.click();
+    await tryCatch(searchInputLocator.fill(youtubeURL));
+    await tryCatch(searchButtonLocator.click());
 
     // Loading...
     const groupButtonResult = await tryCatch(
-      page.data.waitForSelector(groupButton, { timeout: 6000 })
+      page.data.waitForSelector(groupButton, { timeout: 60000 })
     );
     if (groupButtonResult.error) {
       // This usually means that the YouTube URL is invalid.
-      console.warn(`[CDN FAILED]`);
+      console.warn(`[CDN FAILED] ${groupButtonResult.error.message}`);
       resultHolder.push({
         buffer: null,
         success: false,
         youtubeURL,
+        mode,
         title: "untitled",
       });
       continue;
@@ -90,22 +92,26 @@ export default async function direct(
     const baseGroup = page.data.locator(groupButton);
 
     const selectOption = await tryCatch(
-      baseGroup.locator("select").selectOption(selectedOption(), {
+      baseGroup.locator("select").selectOption(selectedOption(mode), {
         timeout: TIMEOUT,
       })
     );
     if (selectOption.error) {
       console.warn(`[FALLBACK]: ${selectOption.error.message}`);
-      baseGroup.locator("select").selectOption(selectedOption("fallback"), {
-        timeout: TIMEOUT,
-      });
+      baseGroup
+        .locator("select")
+        .selectOption(selectedOption(mode, "fallback"), {
+          timeout: TIMEOUT,
+        });
     }
-    await baseGroup.locator("button").click({ timeout: TIMEOUT });
-    const titleLocator = page.data.locator("h3[class]");
+    await tryCatch(baseGroup.locator("button").click({ timeout: TIMEOUT }));
+    const titleLocator = page.data.locator(
+      "//h3[ancestor::div[@id='downloadSection']]"
+    );
     const title = await titleLocator.first().textContent();
 
     // Loading...
-    await page.data.waitForSelector(anchorDownload);
+    await tryCatch(page.data.waitForSelector(anchorDownload));
     const href = await page.data
       .locator(anchorDownload)
       .getAttribute("href", { timeout: TIMEOUT });
@@ -114,6 +120,7 @@ export default async function direct(
       resultHolder.push({
         buffer: null,
         success: false,
+        mode,
         youtubeURL,
         title: `${title ? title : "untitled"}`,
       });
@@ -132,6 +139,7 @@ export default async function direct(
         buffer: null,
         success: false,
         youtubeURL,
+        mode,
         title: `${title ? title : "untitled"}`,
       });
       continue;
@@ -143,22 +151,21 @@ export default async function direct(
       buffer: Buffer.from(arrayBuffer),
       success: true,
       youtubeURL,
+      mode,
       title: `${title ? title : "untitled"}`,
     });
   }
 
-  await browser.data.close();
+  await tryCatch(browser.data.close());
 
   console.info("Downloading songs...");
-  for (const { success, buffer, title, youtubeURL } of resultHolder) {
+  for (const { success, buffer, title, youtubeURL, mode } of resultHolder) {
     await logging({ success, title, youtubeURL });
     if (!success) continue;
 
     await fs.writeFile(
       new URL(
-        `${sanitizeTitle(title).split(".")[0]}${
-          downloadMode ? `.${downloadMode}` : ""
-        }`,
+        `${sanitizeTitle(title).split(".")[0]}${mode ? `.${mode}` : ""}`,
         rawDirectoryURL
       ),
       buffer
