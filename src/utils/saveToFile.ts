@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 
 export default async function saveToFile(stringURL: string, title: string) {
+  if (!stringURL) return console.log("String URL is undefined.");
   if (stringURL.trim() === "") {
     return console.log("String URL passed is not valid.");
   }
@@ -27,7 +28,7 @@ export default async function saveToFile(stringURL: string, title: string) {
   if (!response.ok) return console.log("Error in fetching.");
   const buffer = await response.arrayBuffer();
   /** Removes non-numerical and alphabet characters. */
-  const cleanerRegExp = /[^0-9A-Za-z ]*/g;
+  const cleanerRegExp = /([#%&{}\\\/><*\?$":@+`\|=]*)/g;
   const sanitizedTitle = title.replace(cleanerRegExp, "").trim();
 
   await fs.writeFile(
